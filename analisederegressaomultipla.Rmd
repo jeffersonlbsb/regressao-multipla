@@ -1,0 +1,428 @@
+---
+title: "Análise de Regressão Linear Múltipla"
+author: "Jefferson Brito"
+date: "18-07-2022"
+output:
+  prettydoc::html_pretty:
+    theme: HPSTR
+    highlight: github
+    toc: TRUE
+    number_sections: TRUE
+---
+
+# Regressão linear para predição de preços de casas.
+
+Para acessar as informações sobre o conjunto de dados clique [aqui](https://www.kaggle.com/datasets/tanyachawla412/house-prices).
+
+## Explicação das variáveis do conjunto de dados
+
+-   Avg. Area Income: Renda média da população da área onde a casa está localizada.
+
+-   House Age: Idade da casa em anos.
+
+-   Number of Rooms: Número de salas da casa.
+
+-   Number of Bedrooms: Número de quartos da casa.
+
+-   Area Population: População da área onde a casa está localizada.
+
+-   Price: Preço da casa.
+
+-   Address: Endereço da casa (será removida).
+
+## Carregando os pacotes que serão usados
+
+```{r setup, warning=FALSE, message=FALSE}
+library(fBasics)
+library(MASS)
+library(lmtest)
+library(car)
+library(corrgram)
+```
+
+## Carregando o conjunto de dados
+
+```{r echo=TRUE, warning=FALSE}
+df = read.csv('House_price.csv') |> as.data.frame()
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+df = df[, -7]
+```
+
+```{r, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+options(scipen = 999)
+```
+
+```{r}
+
+```
+
+```{r}
+head(df)
+```
+
+## Análise exploratória de dados
+
+### Algumas estatísticas desctitivas das variáveis
+
+```{r}
+basicStats(df)
+```
+
+### Análise gráfica das variáveis
+
+```{r}
+par(mfrow=c(3, 2))
+
+for (name in colnames(df)) {
+  hist(df[[name]],freq=F,main=paste0("Densidade da variavel ",name),
+       xlab = name,ylab = 'density',col='grey35')
+  lines(density(df[[name]]),lwd=4,col='red')
+}
+
+
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+par(mfrow=c(1, 1))
+```
+
+Podemos notar que a variável `Number.of.Bedrooms` é a única variável que aparentemente não tende à distribuição normal.
+
+### Análise de correlação das variáveis
+
+```{r}
+cor(df)
+```
+
+```{r, warning=FALSE, message=FALSE}
+corrgram(df, 
+         upper.panel=panel.cor,
+         #upper.panel=panel.conf,
+         cex.labels=1.5, cex=1.2)
+```
+
+Observando as correlações é possível identificar que existe uma correlação relevante entre as variáveis `Avg...Area.Income` e `Price`. É possivel identificar também que a nossa variável resposta `Price` tem correlação positiva com todas as variáveis explicativas.
+
+## Construção do modelo
+
+Não foi detectado nenhum indício de que devemos retirar alguma variável para a contrução do modelo, portanto, construiremos o modelo com todas as variáveis do conjunto de dados.
+
+```{r}
+ml1 = lm(Price ~ ., data = df)
+```
+
+### Análisando o modelo (ml1)
+
+Nesse primero passo nós iremos analisar o R2 e testar algumas hipóteses, são elas:
+
+Teste t:
+
+h0: beta = 0
+
+h1: beta != 0
+
+Teste F:
+
+h0: modelo ml1 = modelo nulo
+
+h1: modelo ml1 != modelo nulo
+
+```{r}
+summary(ml1)
+```
+
+Pelo teste t nós não rejeitamos h0 apenas para o parametro `Number.of.Bedrooms`, ou seja, ele contém o valor 0 no seu intervalo de confiança.
+
+Pelo teste F nós rejeitamos h0, ou seja, o modelo proposto é diferente do modelo nulo.
+
+O R2 e o R2-ajustado indicam que o modelo descreve bem a variação do preço das casas.
+
+Vamos conferir o intervalo de confiança com 95% para os parâmetros.
+
+```{r}
+confint(ml1)
+```
+
+Como já imaginavamos, o intervalo de confiança para parâmetro `Number.of.Bedrooms` contém o valor 0.
+
+### Verificando os pressupostos para validação do modelo
+
+#### Independência dos dados
+
+```{r}
+plot(ml1, which = 3)
+```
+
+Nesse gráfico de valores ajustados vs raís quadrada dos resíduos padronizados podemos ver que os dados estão desperços em torno da linha vermelha e não há nenhuma tendencia visível, isso indica que os dados são independentes. Para confirmar iremos realizar o teste de Durbin-Watson, em que as hipoteses são:
+
+h0: os valores dos resíduos do modelo são independentes;
+
+h1: os resíduos são autocorrelacionados.
+
+```{r}
+durbinWatsonTest(ml1)
+```
+
+Como o p-valor do teste foi maior do que os 5% de significancia, temos a não rejeição de h0. Portanto, a suposição de independencia dos dados foi atendida.
+
+#### Homocedasticidade dos resíduos
+
+```{r}
+plot(ml1, which = 1)
+```
+
+Neste gráfico seguimos praticamente a mesma linha de pensamento do anterior, sendo que aqui os dados tem que estar dispersos ao redor da média (zero, já que tem que seguir normalidade com a média igual a 0) e não podem apresentar nenhum tipo de tendencia.
+
+Para confirmar se os resíduos são mesmo homocedasticos iremos realizar o teste de Breusch-Pagan, que tem como hipóteses:
+
+h0: há homocedasticidade nos dados;
+
+h1: há heterocedasticidade nos dados.
+
+```{r}
+bptest(ml1)
+```
+
+Como o valor-p 0,312 foi maior do que 5% de significância, temos a não rejeição de h0. Assim, a suposição de homocedasticidade foi atendida.
+
+#### Normalidade dos resíduos
+
+```{r}
+plot(ml1, which = 2)
+```
+
+Como quase todos os dados estão em cima da linha, temos indícios que levam a acreditar que os resíduos seguem normalidade. Para confirmar isso, construirei um outro grafico e realizarei o teste de Shapiro-Wilk, que tem como hipoteses:
+
+h0: a distribuição Normal modela adequadamente os resíduos do modelo;
+
+h1: a distribuição Normal não modela adequadamente os resíduos do modelo.
+
+```{r}
+hist(ml1$residuals, probability = T, xlab = "Residuos", ylab = "Densidade",
+     main = "Histograma dos residuos")
+lines(density(ml1$residuals))
+```
+
+```{r}
+shapiro.test(ml1$residuals)
+```
+
+Como o p-valor 0,2657 foi maior do que 5% de significancia, temos a não rejeição de h0. Logo, a suposição de normalidade foi atendida.
+
+Então, de acordo com os gráficos e com o teste de Shapiro-Wilk temos que os resíduos são normalmente distribuidos.
+
+A homocedasticidade dos resíduos também pode ser comprovada quando os resíduos seguem a distribuição normal.
+
+#### Multicolinearidade
+
+A multicolinearidade pode ser verificada com o `vif()`, que mede o quanto a variância de um coeficiente de regressão estimado aumenta se seus preditores estão correlacionados. Se todos os VIFs forem 1, não há multicolinearidade, mas se alguns VIFs forem maiores do que 1, os preditores estão correlacionados.
+
+```{r}
+vif(ml1)
+```
+
+Este teste identificou uma pequena correlação entre as variáveis `Number.of.Bedrooms` e `Number.of.Rooms`, que já haviamos detectado na análise de correlção.
+
+Este modelo, atende todos os pressupostos, mas possui um parâmetro não significante. Portanto, irei realizar o StepWise nesse modelo para ver se ele indica algum modelo melhor.
+
+### StepWise
+
+```{r}
+step(ml1, direction = "both")
+```
+
+O step retornou que o modelo sem o parâmetro não significativo seria uma melhor opção. Portanto, iremos construir um novo modelo sem esse parâmetro.
+
+## Construção do segundo modelo
+
+```{r}
+ml2 = lm(Price ~ Avg..Area.Income + House.Age + Number.of.Rooms + Area.Population, data = df)
+```
+
+### Analisando o segundo modelo (ml2)
+
+```{r}
+summary(ml2)
+```
+
+Testes realizados:
+
+Teste t:
+
+h0: beta = 0
+
+h1: beta != 0
+
+Pelo teste t nós rejeitamos h0 para todos os parametros, ou seja, todos os parâmetros são significativos para o modelo predizer o preço das casas, pois não possuem o valor 0 em seu intervalo de confiança.
+
+Teste F:
+
+h0: modelo ml2 = modelo nulo
+
+h1: modelo ml2 != modelo nulo
+
+Pelo teste F nós rejeitamos h0, portanto, o segundo modelo também é diferente do modelo nulo.
+
+Já o R2 e o R2-ajustado indicam que o modelo descreve bem a variação do preço das casas.
+
+Vamos verificar o intervalo de confiança a 95% para os parâmetros]
+
+```{r}
+confint(ml2)
+```
+
+Como dito anteriormente, os parâmetros não possuem o valor 0 em seus intervalos de confiança.
+
+### Verificando os presupostos do modelo
+
+#### Independência dos dados
+
+```{r}
+plot(ml2, which = 3)
+```
+
+Teste de Durbin-Watson:
+
+h0: os valores dos resíduos do modelo são independentes;
+
+h1: os resíduos são autocorrelacionados.
+
+```{r}
+durbinWatsonTest(ml2)
+```
+
+Como o p-valor do teste foi maior do que os 5% de significancia, temos a não rejeição de h0. Portanto, a suposição de independencia dos dados foi atendida.
+
+#### Homocedasticidade dos resíduos
+
+```{r}
+plot(ml2, which = 1)
+```
+
+Teste de Breusch-Pagan:
+
+h0: ha homocedasticidade nos dados;
+
+h1: ha heterocedasticidade nos dados.
+
+```{r}
+bptest(ml2)
+```
+
+Como o valor-p 0,2121 foi maior do que 5% de significância, temos a não rejeição de h0. Assim, a suposição de homocedasticidade foi atendida.
+
+#### Normalidade dos resíduos
+
+```{r}
+plot(ml2, which = 2)
+```
+
+```{r}
+hist(ml2$residuals, probability = T, xlab = "Residuos", ylab = "Densidade",
+     main = "Histograma dos residuos")
+lines(density(ml2$residuals))
+```
+
+Teste de Shapiro-Wilk:
+
+h0: a distribuição Normal modela adequadamente os resíduos do modelo;
+
+h1: a distribuição Normal não modela adequadamente os resíduos do modelo.
+
+```{r}
+shapiro.test(ml2$residuals)
+```
+
+Como o p-valor 0,2911 foi maior do que 5% de significancia, temos a não rejeição de h0. Logo, a suposição de normalidade foi atendida.
+
+#### Multicolinearidade
+
+```{r}
+vif(ml2)
+```
+
+Como todos os VIF's foram praticamente iguais a 1, temos que não há multicolinearidade.
+
+Tendo em vista que todos os pressupostos foram atendidos, podemos então dizer que o ml2 é um bom modelo para predição do preço de casas.
+
+## Comparando os dois modelos
+
+Como os dois modelos tiveram os pressupostos atendidos, então podemos compara-los, tendo como finalidade descobrir se realmente houve uma grande diferença no desempenhos dos mesmos.
+
+### Comparando via R2 ajustado
+
+```{r}
+modelos = c('Modelo 1','Modelo 2')
+r2_ajustados = c(summary(ml1)$adj.r.squared,summary(ml2)$adj.r.squared)
+tabela = data.frame(modelos,r2_ajustados) |> print()
+```
+
+O R2 ajustado dos dois modelos apresentam praticamente o mesmo valor. Portanto, há indícios de que os dois modelos descrevem bem a variação do preço das casas.
+
+### Comparando via ANOVA
+
+```{r}
+anova(ml1, ml2)
+```
+
+O teste F para analise de variancia mostra que não existe diferença significativa entre os modelos analisados, ou seja, ambos os modelos descrevem da mesma forma a variabilidade dos dados. O RSS (soma de quadrado dos resíduos) de ambos também é praticamente o mesmo.
+
+### AIC
+
+O **critério de informação de Akaike** (AIC) é uma métrica que mensura a qualidade de um modelo estatístico visando também a sua simplicidade. Fornece, portanto, uma métrica para comparação e seleção de modelos, em que menores valores de AIC representam uma maior qualidade e simplicidade, segundo este critério.
+
+```{r}
+AIC(ml1, ml2)
+```
+
+Também no critério de Akaike os dois modelos possuem praticamente o mesmo valor, isso significa dizer que ambos os modelos possuem a mesma qualidade e simplicidade.
+
+## Escolha do modelo
+
+De acordo com o método stepwise e com as métricas utilizadas para seleçãoo do modelo (R2 ajustado,AIC e ANOVA), o modelo escolhido como ideal para esses dados será o modelo 2 (ml2) ao qual possui todos os parâmetros significantes diante do teste t, rejeitando a hipótese de que os parâmetros são iguais a 0 (h0: beta = 0), possui um R2 muito bom, e além disso, o modelo também tem um valor de p significante para o teste F do modelo. Isso significa que o modelo desenvolvido é diferente do modelo nulo, ao qual seria o modelo que possui apenas o intercepto como parâmetro, ou seja, os valores da variável resposta previstos pelo modelo seriam iguais a média (h0: ml2 = modelo nulo). O que desclassifica o modelo 1 (ml1) é apenas o fato de ele possuir um parâmetro não significante.
+
+## Exemplo
+
+```{r}
+ml2$coefficients
+```
+
+Tendo em vista que o nossos parâmetros são de difícil interpretação (por conta do alto valor negativo do intercepto), iremos criar um exemplo prático e analisaremos o resultado.
+
+Para esse exemplo usaremos uma casa desse conjunto de dados que possui:
+
+-   Renda média anual da área (`Avg..Area.Income`) de aproximadamente 60000 (sessenta mil) dólares;
+
+-   5 anos de Idade da casa (`House.Age`);
+
+-   8 cômodos (`Number.of.Rooms`);
+
+-   E aproximadamente 27809 (vinte e sete mil oitossentos e nove) pessoas que moram na área (`Area.Population`).
+
+No nosso conjunto de dados essa casa custa aproximadamente 895737 (oitossentos e noventa e cinco mil setessentos e trinta e sete) dólares.
+
+```{r}
+df[25,]
+```
+
+Vamos então realizar essa predição:
+
+```{r, message=FALSE, warning=FALSE, paged.print=FALSE}
+attach(df)
+newdata = data.frame(Avg..Area.Income = 60000, House.Age = 5, Number.of.Rooms = 8, Area.Population = 27809)
+predict(ml2, newdata = newdata)
+```
+
+Nosso modelo fez uma predição decente do preço dessa casa, levando a crêr que realmente seja um bom modelo.
+
+## Conclusão
+
+O nosso segundo modelo (ml2) teve todos os pressupostos atendidos e parece ser um bom modelo para predição de preços de casas.
+
+Para trabalhos futuros eu indico a padronização dos dados, afim de uma diminuição da variância em algumas variáveis.
+
+Por fim, agradeço a todos vocês!
+
+Obrigado!
